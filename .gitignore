@@ -1,0 +1,21 @@
+# 가상환경
+.venv/
+
+# Google 인증 정보 (절대 커밋 금지)
+credentials.json
+token.json
+
+# 사용자 설정 (개인별 다름)
+config.json
+
+# Claude Code 내부 파일
+.claude/
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
