@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import datetime, date
 
 try:
@@ -11,8 +12,29 @@ except ImportError:
     GOOGLE_AVAILABLE = False
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_SECRETS_DIR = os.path.join(_BASE_DIR, 'secrets')
+
+
+def _base_dir() -> str:
+    # PyInstaller로 패키징된 경우 exe 위치, 아니면 스크립트 위치
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+_SECRETS_DIR = os.path.join(_base_dir(), 'secrets')
+os.makedirs(_SECRETS_DIR, exist_ok=True)
+
+_MISSING_CREDS_MSG = """\
+credentials.json 파일이 없습니다.
+
+[설정 방법]
+1. console.cloud.google.com 접속
+2. API 및 서비스 → 사용자 인증 정보
+3. OAuth 2.0 클라이언트 ID 만들기 (데스크톱 앱)
+4. JSON 다운로드 후 파일명을 credentials.json으로 변경
+5. 아래 폴더에 넣고 프로그램 재시작
+
+""" + os.path.join(_base_dir(), 'secrets')
 
 
 def get_service():
@@ -28,11 +50,7 @@ def get_service():
             creds.refresh(Request())
         else:
             if not os.path.exists(creds_path):
-                raise FileNotFoundError(
-                    'credentials.json 파일이 없습니다.\n'
-                    'Google Cloud Console에서 OAuth 클라이언트 ID를 만들고\n'
-                    'credentials.json을 같은 폴더에 넣어주세요.'
-                )
+                raise FileNotFoundError(_MISSING_CREDS_MSG)
             flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
             creds = flow.run_local_server(port=0)
 

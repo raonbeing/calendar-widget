@@ -1,7 +1,15 @@
 import os
+import sys
 import json
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'secrets', 'config.json')
+
+def _base_dir() -> str:
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+CONFIG_PATH = os.path.join(_base_dir(), 'secrets', 'config.json')
 
 DEFAULTS = {
     'alpha': 0.85,
