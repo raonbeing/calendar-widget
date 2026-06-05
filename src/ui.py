@@ -159,20 +159,32 @@ class CalendarWidget:
         # 타임라인 캔버스 (스크롤)
         container = tk.Frame(parent, bg=self._colors['bg_widget'])
         container.pack(fill='both', expand=True)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
 
         self._canvas = tk.Canvas(
             container, bg=self._colors['bg_widget'],
             highlightthickness=0, bd=0
         )
         scrollbar = tk.Scrollbar(container, orient='vertical', command=self._canvas.yview)
-        self._canvas.configure(yscrollcommand=scrollbar.set)
+        self._canvas.grid(row=0, column=0, sticky='nsew')
 
-        scrollbar.pack(side='right', fill='y')
-        self._canvas.pack(side='left', fill='both', expand=True)
+        def _autoscroll(first, last):
+            if float(first) <= 0.0 and float(last) >= 1.0:
+                scrollbar.grid_remove()
+            else:
+                scrollbar.grid(row=0, column=1, sticky='ns')
+            scrollbar.set(first, last)
+
+        self._canvas.configure(yscrollcommand=_autoscroll)
 
         self._canvas.bind('<MouseWheel>',
             lambda e: self._canvas.yview_scroll(-1 * (e.delta // 120), 'units'))
         self._canvas.bind('<Configure>', lambda _: self._on_canvas_resize())
+        self._canvas.bind('<Button-1>',        self._drag_select_start)
+        self._canvas.bind('<B1-Motion>',       self._drag_select_move)
+        self._canvas.bind('<ButtonRelease-1>', self._drag_select_end)
+        self._drag_start_y: float | None = None
 
     def _build_footer(self, parent):
         tk.Frame(parent, bg=self._colors['sep'], height=1).pack(fill='x', padx=8, pady=(0, 6))
@@ -382,9 +394,146 @@ class CalendarWidget:
                     font=('Consolas', 7), tags=(tag,)
                 )
 
-            canvas.tag_bind(tag, '<Button-1>', lambda _, t=tag: self._on_event_click(t))
+            canvas.tag_bind(tag, '<Button-3>', lambda e, t=tag: self._show_context_menu(e, t))
 
         self._draw_now_line()
+
+    def _y_to_time(self, y: float) -> tuple[int, int]:
+        body_y = getattr(self, '_body_y', TOGGLE_H)
+        px     = getattr(self, '_px_per_hr', 15)
+        start_h = getattr(self, '_start_hour', EARLY_END)
+        total_min = int((y - body_y) / px * 60) + start_h * 60
+        total_min = round(total_min / 15) * 15
+        total_min = max(0, min(23 * 60 + 45, total_min))
+        return total_min // 60, total_min % 60
+
+    def _drag_select_start(self, e):
+        body_y = getattr(self, '_body_y', TOGGLE_H)
+        if e.y < body_y:
+            self._drag_start_y = None
+            return 'break'
+        self._drag_start_y = e.y
+        return 'break'
+
+    def _drag_select_move(self, e):
+        if self._drag_start_y is None:
+            return 'break'
+        self._canvas.delete('drag_select')
+        y1 = min(self._drag_start_y, e.y)
+        y2 = max(self._drag_start_y, e.y)
+        cw = self._canvas.winfo_width()
+        self._canvas.create_rectangle(
+            LABEL_W + 2, y1, cw - 2, y2,
+            fill=self._colors['acc_event'], outline='',
+            stipple='gray50', tags='drag_select'
+        )
+        h1, m1 = self._y_to_time(y1)
+        h2, m2 = self._y_to_time(y2)
+        self._canvas.delete('drag_label')
+        self._canvas.create_text(
+            LABEL_W + 6, y1 + 3,
+            text=f'{h1:02d}:{m1:02d}–{h2:02d}:{m2:02d}',
+            anchor='nw', fill='white', font=('Consolas', 7), tags='drag_label'
+        )
+        return 'break'
+
+    def _drag_select_end(self, e):
+        if self._drag_start_y is None:
+            return 'break'
+        y1 = min(self._drag_start_y, e.y)
+        y2 = max(self._drag_start_y, e.y)
+        self._canvas.delete('drag_select')
+        self._canvas.delete('drag_label')
+        self._drag_start_y = None
+        if y2 - y1 < 8:
+            return 'break'
+        h1, m1 = self._y_to_time(y1)
+        h2, m2 = self._y_to_time(y2)
+        if (h1, m1) == (h2, m2):
+            m2 = m1 + 30
+            if m2 >= 60:
+                h2 += 1
+                m2 -= 60
+        self._open_quick_add_dialog(h1, m1, h2, m2)
+        return 'break'
+
+    def _open_quick_add_dialog(self, start_h: int, start_m: int, end_h: int, end_m: int):
+        dlg = tk.Toplevel(self.root)
+        dlg.configure(bg=self._colors['bg_widget'])
+        dlg.resizable(False, False)
+        dlg.wm_attributes('-topmost', True)
+        dlg.overrideredirect(True)
+        dlg.geometry(f'210x110+{self.root.winfo_x() - 220}+{self.root.winfo_y() + 80}')
+
+        def entry_widget(parent, default, width=7):
+            e = tk.Entry(
+                parent, bg=self._colors['btn_bg'], fg=self._colors['text_main'],
+                insertbackground=self._colors['text_main'],
+                font=('Consolas', 9), relief='flat', bd=3, width=width, justify='center'
+            )
+            e.insert(0, default)
+            return e
+
+        # X 버튼
+        tk.Button(
+            dlg, text='✕', command=dlg.destroy,
+            bg=self._colors['bg_widget'], fg=self._colors['text_sub'],
+            font=('Consolas', 8), relief='flat', bd=0, cursor='hand2'
+        ).place(relx=1.0, x=-4, y=4, anchor='ne')
+
+        # 시간 행
+        time_row = tk.Frame(dlg, bg=self._colors['bg_widget'])
+        time_row.pack(fill='x', padx=8, pady=(10, 4))
+        tk.Label(time_row, text='시간', fg=self._colors['text_sub'],
+                 bg=self._colors['bg_widget'], font=('Consolas', 7), width=4, anchor='w').pack(side='left')
+        e_start = entry_widget(time_row, f'{start_h:02d}:{start_m:02d}')
+        e_start.pack(side='left')
+        tk.Label(time_row, text='–', fg=self._colors['text_sub'],
+                 bg=self._colors['bg_widget'], font=('Consolas', 8)).pack(side='left', padx=2)
+        e_end = entry_widget(time_row, f'{end_h:02d}:{end_m:02d}')
+        e_end.pack(side='left')
+
+        # 제목 행
+        title_row = tk.Frame(dlg, bg=self._colors['bg_widget'])
+        title_row.pack(fill='x', padx=8, pady=(0, 4))
+        tk.Label(title_row, text='제목', fg=self._colors['text_sub'],
+                 bg=self._colors['bg_widget'], font=('Consolas', 7), width=4, anchor='w').pack(side='left')
+        e_title = entry_widget(title_row, '', width=16)
+        e_title.pack(side='left', fill='x', expand=True)
+        e_title.focus_set()
+
+        # 추가 버튼
+        tk.Button(
+            dlg, text='추가', command=lambda: submit(),
+            bg=self._colors['btn_add'], fg='#55cc88',
+            font=('Consolas', 8, 'bold'), relief='flat', cursor='hand2',
+            padx=10, pady=2, bd=0
+        ).pack(anchor='e', padx=8, pady=(0, 8))
+
+        today = date.today()
+
+        def submit(e=None):
+            title = e_title.get().strip()
+            if not title:
+                e_title.focus_set()
+                return
+            try:
+                sh, sm = [int(x) for x in e_start.get().split(':')]
+                eh, em = [int(x) for x in e_end.get().split(':')]
+            except ValueError:
+                return
+            dlg.destroy()
+            start_dt = datetime(today.year, today.month, today.day, sh, sm).astimezone()
+            end_dt   = datetime(today.year, today.month, today.day, eh, em).astimezone()
+            self.status_lbl.config(text='추가 중...')
+            threading.Thread(
+                target=self._do_create, args=(None, title, start_dt, end_dt), daemon=True
+            ).start()
+
+        e_title.bind('<Return>', submit)
+        e_start.bind('<Return>', lambda e: e_end.focus_set())
+        e_end.bind('<Return>',   lambda e: e_title.focus_set())
+        dlg.bind('<Escape>', lambda e: dlg.destroy())
 
     def _toggle_early(self):
         self._show_early = not self._show_early
@@ -422,18 +571,25 @@ class CalendarWidget:
         self._draw_now_line()
         self.root.after(60_000, self._schedule_time_update)
 
-    def _on_event_click(self, tag: str):
+    def _show_context_menu(self, e, tag: str):
         event = self._event_tags.get(tag)
         if not event:
             return
-        self._confirm_delete(event.get('id', ''), event.get('summary', ''))
+        menu = tk.Menu(self._canvas, tearoff=0)
+        menu.configure(
+            bg=self._colors['btn_bg'], fg=self._colors['text_main'],
+            activebackground=self._colors['btn_close'], activeforeground='white',
+            font=('Consolas', 8), bd=0, relief='flat'
+        )
+        event_id = event.get('id', '')
+        menu.add_command(label='삭제', command=lambda: self._start_delete(event_id))
+        menu.tk_popup(e.x_root, e.y_root)
 
-    def _confirm_delete(self, event_id: str, summary: str):
+    def _start_delete(self, event_id: str):
         if not event_id:
             return
-        if messagebox.askyesno('일정 삭제', f'삭제할까요?\n\n{summary}', parent=self.root):
-            self.status_lbl.config(text='삭제 중...')
-            threading.Thread(target=self._do_delete, args=(event_id,), daemon=True).start()
+        self.status_lbl.config(text='삭제 중...')
+        threading.Thread(target=self._do_delete, args=(event_id,), daemon=True).start()
 
     def _do_delete(self, event_id: str):
         try:
@@ -669,7 +825,8 @@ class CalendarWidget:
     def _do_create(self, dlg, title: str, start_dt: datetime, end_dt: datetime):
         try:
             create_event(title, start_dt, end_dt)
-            self.root.after(0, dlg.destroy)
+            if dlg is not None:
+                self.root.after(0, dlg.destroy)
             self.root.after(0, self._load_calendar)
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror('오류', str(e)))
