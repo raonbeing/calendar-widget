@@ -6,7 +6,7 @@ import json
 def _base_dir() -> str:
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 CONFIG_PATH = os.path.join(_base_dir(), 'secrets', 'config.json')

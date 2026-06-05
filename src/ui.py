@@ -5,8 +5,8 @@ from tkinter import messagebox, colorchooser, filedialog
 import threading
 from datetime import datetime, date
 
-from api import fetch_today_events, create_event, delete_event, _SECRETS_DIR
-from config import load_settings, save_settings
+from .api import fetch_today_events, create_event, delete_event, _SECRETS_DIR
+from .config import load_settings, save_settings
 
 TRANSPARENT_COLOR = '#000001'
 REFRESH_INTERVAL_MS = 30 * 60 * 1000

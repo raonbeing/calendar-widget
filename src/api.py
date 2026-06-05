@@ -15,10 +15,10 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
 
 def _base_dir() -> str:
-    # PyInstaller로 패키징된 경우 exe 위치, 아니면 스크립트 위치
+    # PyInstaller로 패키징된 경우 exe 위치, 아니면 프로젝트 루트
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 _SECRETS_DIR = os.path.join(_base_dir(), 'secrets')
