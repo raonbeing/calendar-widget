@@ -12,11 +12,12 @@ except ImportError:
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_SECRETS_DIR = os.path.join(_BASE_DIR, 'secrets')
 
 
 def get_service():
-    token_path = os.path.join(_BASE_DIR, 'token.json')
-    creds_path = os.path.join(_BASE_DIR, 'credentials.json')
+    token_path = os.path.join(_SECRETS_DIR, 'token.json')
+    creds_path = os.path.join(_SECRETS_DIR, 'credentials.json')
 
     creds = None
     if os.path.exists(token_path):
@@ -76,3 +77,8 @@ def create_event(title: str, start_dt: datetime, end_dt: datetime):
             'end':   {'dateTime': end_dt.isoformat()},
         }
     ).execute()
+
+
+def delete_event(event_id: str):
+    service = get_service()
+    service.events().delete(calendarId='primary', eventId=event_id).execute()

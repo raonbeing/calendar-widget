@@ -9,10 +9,10 @@
 | `api.py` | Google Calendar API 호출 (인증, 일정 조회, 일정 생성) |
 | `config.py` | 사용자 설정 저장·로드 (현재: 투명도) |
 
-## 자동 생성 파일 (git 제외)
+## secrets/ 폴더 (git 제외 — 절대 커밋 금지)
 
 | 파일 | 설명 |
 |------|------|
-| `token.json` | OAuth 인증 토큰 — 최초 실행 시 자동 생성 |
-| `config.json` | 투명도 등 사용자 설정 — 슬라이더 조작 시 자동 저장 |
-| `credentials.json` | Google OAuth 클라이언트 ID — Cloud Console에서 직접 발급 후 수동 배치 |
+| `secrets/credentials.json` | Google OAuth 클라이언트 ID — Cloud Console에서 직접 발급 후 수동 배치 |
+| `secrets/token.json` | OAuth 인증 토큰 — 최초 실행 시 자동 생성 |
+| `secrets/config.json` | 투명도 등 사용자 설정 — 슬라이더 조작 시 자동 저장 |

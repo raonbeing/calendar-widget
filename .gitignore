@@ -1,12 +1,8 @@
 # 가상환경
 .venv/
 
-# Google 인증 정보 (절대 커밋 금지)
-credentials.json
-token.json
-
-# 사용자 설정 (개인별 다름)
-config.json
+# 개인정보·인증·설정 파일 (절대 커밋 금지)
+secrets/
 
 # Claude Code 내부 파일
 .claude/
