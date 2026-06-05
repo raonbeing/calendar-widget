@@ -502,13 +502,21 @@ class CalendarWidget:
         e_title.pack(side='left', fill='x', expand=True)
         e_title.focus_set()
 
-        # 추가 버튼
+        # 버튼 행
+        btn_row = tk.Frame(dlg, bg=self._colors['bg_widget'])
+        btn_row.pack(anchor='e', padx=8, pady=(0, 8))
         tk.Button(
-            dlg, text='추가', command=lambda: submit(),
+            btn_row, text='추가', command=lambda: submit(),
             bg=self._colors['btn_add'], fg='#55cc88',
             font=('Consolas', 8, 'bold'), relief='flat', cursor='hand2',
             padx=10, pady=2, bd=0
-        ).pack(anchor='e', padx=8, pady=(0, 8))
+        ).pack(side='left')
+        tk.Button(
+            btn_row, text='취소', command=dlg.destroy,
+            bg=self._colors['btn_bg'], fg=self._colors['text_sub'],
+            font=('Consolas', 8), relief='flat', cursor='hand2',
+            padx=10, pady=2, bd=0
+        ).pack(side='left', padx=(4, 0))
 
         today = date.today()
 
