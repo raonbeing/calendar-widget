@@ -1,9 +1,11 @@
+import os
+import shutil
 import tkinter as tk
-from tkinter import messagebox, colorchooser
+from tkinter import messagebox, colorchooser, filedialog
 import threading
 from datetime import datetime, date
 
-from api import fetch_today_events, create_event, delete_event
+from api import fetch_today_events, create_event, delete_event, _SECRETS_DIR
 from config import load_settings, save_settings
 
 TRANSPARENT_COLOR = '#000001'
@@ -135,15 +137,9 @@ class CalendarWidget:
         hdr.pack(fill='x', padx=8, pady=(8, 4))
 
         tk.Label(
-            hdr, text='CALENDAR',
-            fg=self._colors['text_header'], bg=self._colors['bg_widget'],
-            font=('Consolas', 10, 'bold'), anchor='center'
-        ).pack(fill='x', pady=(0, 2))
-
-        tk.Label(
             hdr, text=date_str,
             fg=self._colors['text_date'], bg=self._colors['bg_widget'],
-            font=('Consolas', 8), anchor='center'
+            font=('Consolas', 9), anchor='center'
         ).pack(fill='x')
 
         self.status_lbl = tk.Label(
@@ -456,7 +452,7 @@ class CalendarWidget:
         dlg.configure(bg=self._colors['bg_widget'])
         dlg.resizable(False, False)
         dlg.wm_attributes('-topmost', True)
-        dlg.geometry(f'240x280+{self.root.winfo_x() - 250}+{self.root.winfo_y()}')
+        dlg.geometry(f'240x380+{self.root.winfo_x() - 250}+{self.root.winfo_y()}')
 
         tk.Label(
             dlg, text='S E T T I N G S',
@@ -482,6 +478,53 @@ class CalendarWidget:
                  bg=self._colors['bg_widget'], font=('Consolas', 7)).pack(side='left', padx=(4,0))
 
         tk.Frame(dlg, bg=self._colors['sep'], height=1).pack(fill='x', padx=8, pady=(8, 4))
+
+        # Google 연동
+        creds_path = os.path.join(_SECRETS_DIR, 'credentials.json')
+        token_path = os.path.join(_SECRETS_DIR, 'token.json')
+
+        def _auth_status():
+            if os.path.exists(token_path):
+                return '✓ 연결됨', '#55cc88'
+            if os.path.exists(creds_path):
+                return '△ 로그인 필요', '#f0c040'
+            return '✗ 미설정', '#ff6b6b'
+
+        gf = tk.Frame(dlg, bg=self._colors['bg_widget'])
+        gf.pack(fill='x', padx=14, pady=(0, 4))
+
+        tk.Label(gf, text='Google',
+                 fg=self._colors['text_sub'], bg=self._colors['bg_widget'],
+                 font=('Consolas', 8), width=10, anchor='w').pack(side='left')
+
+        s_text, s_color = _auth_status()
+        status_lbl = tk.Label(gf, text=s_text, fg=s_color,
+                              bg=self._colors['bg_widget'], font=('Consolas', 8))
+        status_lbl.pack(side='left')
+
+        def import_credentials():
+            path = filedialog.askopenfilename(
+                parent=dlg,
+                title='credentials.json 선택',
+                filetypes=[('JSON 파일', '*.json'), ('모든 파일', '*.*')]
+            )
+            if not path:
+                return
+            try:
+                shutil.copy(path, creds_path)
+                if os.path.exists(token_path):
+                    os.remove(token_path)
+                status_lbl.config(text='△ 로그인 필요', fg='#f0c040')
+            except Exception as e:
+                messagebox.showerror('오류', str(e), parent=dlg)
+
+        tk.Button(dlg, text='credentials.json 불러오기',
+                  command=import_credentials,
+                  bg=self._colors['btn_bg'], fg=self._colors['text_date'],
+                  font=('Consolas', 8), relief='flat', cursor='hand2',
+                  padx=8, pady=3, bd=0).pack(anchor='w', padx=14, pady=(2, 4))
+
+        tk.Frame(dlg, bg=self._colors['sep'], height=1).pack(fill='x', padx=8, pady=(0, 4))
 
         # 색상
         pending = {
