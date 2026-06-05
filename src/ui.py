@@ -602,7 +602,7 @@ class CalendarWidget:
     def _do_delete(self, event_id: str):
         try:
             delete_event(event_id)
-            self.root.after(0, self._load_calendar)
+            self.root.after(2000, self._load_calendar)
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror('오류', str(e)))
 
@@ -835,7 +835,7 @@ class CalendarWidget:
             create_event(title, start_dt, end_dt)
             if dlg is not None:
                 self.root.after(0, dlg.destroy)
-            self.root.after(0, self._load_calendar)
+            self.root.after(2000, self._load_calendar)
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror('오류', str(e)))
 
