@@ -60,15 +60,14 @@ def get_service():
     return build('calendar', 'v3', credentials=creds)
 
 
-def fetch_today_events() -> tuple[list, str | None]:
+def fetch_events_for_date(target_date: date) -> tuple[list, str | None]:
     if not GOOGLE_AVAILABLE:
         return [], '필수 패키지 미설치\npip install -r requirements.txt'
 
     try:
         service = get_service()
-        today = date.today()
-        time_min = datetime(today.year, today.month, today.day, 0, 0, 0).astimezone().isoformat()
-        time_max = datetime(today.year, today.month, today.day, 23, 59, 59).astimezone().isoformat()
+        time_min = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0).astimezone().isoformat()
+        time_max = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59).astimezone().isoformat()
 
         result = service.events().list(
             calendarId='primary',

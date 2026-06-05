@@ -1,11 +1,12 @@
 import os
 import shutil
+import calendar
 import tkinter as tk
 from tkinter import messagebox, colorchooser, filedialog
 import threading
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
-from .api import fetch_today_events, create_event, delete_event, _SECRETS_DIR
+from .api import fetch_events_for_date, create_event, delete_event, _SECRETS_DIR
 from .config import load_settings, save_settings
 
 TRANSPARENT_COLOR = '#000001'
@@ -69,6 +70,7 @@ class CalendarWidget:
         self._settings = load_settings()
         self._alpha = self._settings.get('alpha', 0.85)
         self._colors = _build_colors(self._settings)
+        self._view_date: date = date.today()
         self._timed_events: list = []
         self._event_tags: dict = {}   # tag → event dict
         self._show_early: bool = False
@@ -128,19 +130,134 @@ class CalendarWidget:
         self._build_footer(self._outer)
         self._load_calendar()
 
-    def _build_header(self, parent):
-        today = date.today()
+    def _format_date_str(self) -> str:
         weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
-        date_str = f"{today.strftime('%Y.%m.%d')}  {weekdays[today.weekday()]}"
+        d = self._view_date
+        return f"{d.strftime('%Y.%m.%d')}  {weekdays[d.weekday()]}"
 
+    def _header_date_color(self) -> str:
+        if self._view_date == date.today():
+            return '#e8e8ff'
+        return '#4cc9f0'
+
+    def _navigate_date(self, delta: int):
+        self._view_date += timedelta(days=delta)
+        if hasattr(self, '_date_lbl'):
+            self._date_lbl.config(
+                text=self._format_date_str(),
+                fg=self._header_date_color()
+            )
+        self._load_calendar()
+
+    def _open_date_picker(self):
+        popup = tk.Toplevel(self.root)
+        popup.overrideredirect(True)
+        popup.wm_attributes('-topmost', True)
+        popup.configure(bg=self._colors['bg_widget'])
+
+        x = self.root.winfo_x() + 6
+        y = self.root.winfo_y() + 46
+        popup.geometry(f'210x190+{x}+{y}')
+
+        tk.Frame(popup, bg=self._colors['sep'], height=1).pack(fill='x')
+
+        frame = tk.Frame(popup, bg=self._colors['bg_widget'])
+        frame.pack(fill='both', expand=True, padx=6, pady=6)
+
+        view = [self._view_date.year, self._view_date.month]
+
+        def build():
+            for w in frame.winfo_children():
+                w.destroy()
+
+            yr, mo = view[0], view[1]
+
+            nav_row = tk.Frame(frame, bg=self._colors['bg_widget'])
+            nav_row.pack(fill='x', pady=(0, 6))
+
+            tk.Button(nav_row, text='‹', command=lambda: (view.__setitem__(1, view[1]-1) if view[1]>1 else (view.__setitem__(0,view[0]-1), view.__setitem__(1,12))) or build(),
+                      bg=self._colors['bg_widget'], fg=self._colors['text_time'],
+                      font=('Consolas', 11, 'bold'), relief='flat', bd=0, cursor='hand2',
+                      padx=4).pack(side='left')
+
+            tk.Button(nav_row, text='›', command=lambda: (view.__setitem__(1, view[1]+1) if view[1]<12 else (view.__setitem__(0,view[0]+1), view.__setitem__(1,1))) or build(),
+                      bg=self._colors['bg_widget'], fg=self._colors['text_time'],
+                      font=('Consolas', 11, 'bold'), relief='flat', bd=0, cursor='hand2',
+                      padx=4).pack(side='right')
+
+            tk.Label(nav_row, text=f'{yr}.{mo:02d}',
+                     fg=self._colors['text_header'], bg=self._colors['bg_widget'],
+                     font=('Consolas', 9, 'bold')).pack(expand=True)
+
+            grid = tk.Frame(frame, bg=self._colors['bg_widget'])
+            grid.pack()
+
+            for col, label in enumerate(['Mo','Tu','We','Th','Fr','Sa','Su']):
+                fg = '#ff8888' if col >= 5 else self._colors['text_sub']
+                tk.Label(grid, text=label, fg=fg, bg=self._colors['bg_widget'],
+                         font=('Consolas', 7), width=3, anchor='center').grid(row=0, column=col, pady=(0,2))
+
+            today = date.today()
+            for week_i, week in enumerate(calendar.monthcalendar(yr, mo)):
+                for day_i, day in enumerate(week):
+                    if day == 0:
+                        tk.Label(grid, text='', bg=self._colors['bg_widget'], width=3).grid(row=week_i+1, column=day_i)
+                        continue
+                    d = date(yr, mo, day)
+                    if d == self._view_date:
+                        bg, fg = self._colors['acc_event'], self._colors['bg_widget']
+                    elif d == today:
+                        bg, fg = self._colors['bg_widget'], '#ff4444'
+                    else:
+                        bg = self._colors['bg_widget']
+                        fg = '#ff9999' if day_i >= 5 else self._colors['text_main']
+                    tk.Button(
+                        grid, text=str(day), bg=bg, fg=fg,
+                        font=('Consolas', 7), relief='flat', bd=0, cursor='hand2',
+                        width=3, pady=1,
+                        command=lambda d=d: select(d)
+                    ).grid(row=week_i+1, column=day_i)
+
+        def select(d: date):
+            self._view_date = d
+            if hasattr(self, '_date_lbl'):
+                self._date_lbl.config(text=self._format_date_str(), fg=self._header_date_color())
+            self._load_calendar()
+            popup.destroy()
+
+        build()
+        popup.bind('<Escape>', lambda _: popup.destroy())
+        popup.bind('<FocusOut>', lambda _: popup.destroy())
+        popup.focus_set()
+
+    def _build_header(self, parent):
         hdr = tk.Frame(parent, bg=self._colors['bg_widget'])
         hdr.pack(fill='x', padx=8, pady=(8, 4))
 
-        tk.Label(
-            hdr, text=date_str,
-            fg=self._colors['text_date'], bg=self._colors['bg_widget'],
-            font=('Consolas', 9), anchor='center'
-        ).pack(fill='x')
+        nav = tk.Frame(hdr, bg=self._colors['bg_widget'])
+        nav.pack(fill='x')
+
+        tk.Button(
+            nav, text='‹', command=lambda: self._navigate_date(-1),
+            bg=self._colors['bg_widget'], fg=self._colors['text_time'],
+            font=('Consolas', 12, 'bold'), relief='flat', cursor='hand2',
+            padx=6, pady=0, bd=0
+        ).pack(side='left')
+
+        tk.Button(
+            nav, text='›', command=lambda: self._navigate_date(1),
+            bg=self._colors['bg_widget'], fg=self._colors['text_time'],
+            font=('Consolas', 12, 'bold'), relief='flat', cursor='hand2',
+            padx=6, pady=0, bd=0
+        ).pack(side='right')
+
+        self._date_lbl = tk.Label(
+            nav, text=self._format_date_str(),
+            fg=self._header_date_color(), bg=self._colors['bg_widget'],
+            font=('Consolas', 9, 'bold'), anchor='center', cursor='hand2'
+        )
+        self._date_lbl.pack(fill='x', expand=True)
+        self._date_lbl.bind('<Button-1>', lambda e: (self._open_date_picker(), 'break'))
 
         self.status_lbl = tk.Label(
             hdr, text='',
@@ -229,7 +346,8 @@ class CalendarWidget:
         threading.Thread(target=self._worker, daemon=True).start()
 
     def _worker(self):
-        events, error = fetch_today_events()
+        target = self._view_date
+        events, error = fetch_events_for_date(target)
         self.root.after(0, self._render, events, error)
 
     def _render(self, events: list, error: str | None):
@@ -518,7 +636,7 @@ class CalendarWidget:
             padx=10, pady=2, bd=0
         ).pack(side='left', padx=(4, 0))
 
-        today = date.today()
+        target_date = self._view_date
 
         def submit(e=None):
             title = e_title.get().strip()
@@ -531,8 +649,8 @@ class CalendarWidget:
             except ValueError:
                 return
             dlg.destroy()
-            start_dt = datetime(today.year, today.month, today.day, sh, sm).astimezone()
-            end_dt   = datetime(today.year, today.month, today.day, eh, em).astimezone()
+            start_dt = datetime(target_date.year, target_date.month, target_date.day, sh, sm).astimezone()
+            end_dt   = datetime(target_date.year, target_date.month, target_date.day, eh, em).astimezone()
             self.status_lbl.config(text='추가 중...')
             threading.Thread(
                 target=self._do_create, args=(None, title, start_dt, end_dt), daemon=True
@@ -552,6 +670,9 @@ class CalendarWidget:
             return
         canvas = self._canvas
         canvas.delete('now_line')
+
+        if self._view_date != date.today():
+            return
 
         now     = datetime.now()
         px      = getattr(self, '_px_per_hr', 15)
@@ -785,7 +906,7 @@ class CalendarWidget:
             entry.pack(side='left', fill='x', expand=True)
             return entry
 
-        today_str = date.today().strftime('%Y-%m-%d')
+        today_str = self._view_date.strftime('%Y-%m-%d')
         e_title = row('title')
         e_date  = row('date', today_str)
         e_start = row('start', '09:00')
